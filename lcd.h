@@ -1,4 +1,4 @@
-// HD44780
+// HD44780 2-line LCD
 //
 // lcd.h
 //
@@ -96,25 +96,20 @@
 
 
 
-//******************************  commands  ***********************************
-
 #define DDRAM_WRITE  0b10000000
-
 #define CGRAM_WRITE  0b01000000
-#define CGRAM_ADDR   0b00000000
 
 #define DISPLAY_CLR  0b00000001
+
+#define SCR_LEFT     0b00011000
+#define SCR_RIGHT    0b00011100
+
 
 #define CURSOR_ON    0b00000010
 #define CURSOR_OFF   0b00000000
 
 #define BLINK_ON     0b00000001
 #define BLINK_OFF    0b00000000
-
-#define SCR_LEFT     0b00011000
-#define SCR_RIGHT    0b00011100
-
-//*****************************************************************************
 
 
 
@@ -131,24 +126,32 @@ const uint8_t custchar[8*8] PROGMEM =  //64-byte array for 8 custom characters
  };
 
 
+//uint8_t strbuff[42];
+
+
 
 //****************************  prototypes  ***********************************
-void lcd_init(void);
 
-void lcd_bus(uint8_t data);
-void lcd_wrt(uint8_t data);
-void lcd_cmd(uint8_t data);
-void lcd_dat(uint8_t data);
+void lcd_init(void);  //init display
 
-void lcd_clear(void);
-void lcd_goto(uint8_t line, uint8_t column);
+void lcd_bus(uint8_t data);  //write four bit
+void lcd_wrt(uint8_t data);  //write 8-bit data
 
-void lcd_print(const char *str);
+void lcd_dat(uint8_t data);  //write data to the display RAM
+void lcd_cmd(uint8_t data);  //write a command
+void lcd_cmd5(uint8_t data); //wait 5 ms after write
 
-void lcd_custom(const uint8_t *arr);
+void lcd_clear(void);  //clear the screen
+void lcd_goto(uint8_t line, uint8_t column);  //line 0..1, column 0..39
+void lcd_print(const char *str);  //print a string
 
-inline void lcd_right(void);
-inline void lcd_left(void);
+void lcd_custom(const uint8_t *arr); //loading an array of custom characters
+
+inline void lcd_right(void);  //shift right
+inline void lcd_left(void);   //shift left
+
+inline void lcd_cursor_on(void);  //cursor on, blink on
+inline void lcd_cursor_off(void); //cursor off, blink off
 
 //*****************************************************************************
 
@@ -166,23 +169,18 @@ void lcd_init(void)  //init display
 
 	_delay_ms(20); //delay on power up
 
-	lcd_cmd(0b00000011);
-	_delay_ms(5); //wait for the instruction to complete
+	lcd_cmd5(0b00000011); //0x03
+	lcd_cmd5(0b00000011);
+	lcd_cmd5(0b00000011);
 
-	lcd_cmd(0b00000011);
-	_delay_us(200); //wait for the instruction to complete
-
-	lcd_cmd(0b00000011);
-	_delay_us(200);
-
-	lcd_cmd(0b00000010);  //enable 4-bit mode
-	lcd_cmd(0b00001000); //4-bit mode, 2-line, 5x8 font
-	lcd_cmd(0b00001000); //display off
+	lcd_cmd5(0b00000010); //enable 4-bit mode
+	lcd_cmd5(0b00001000); //4-bit mode, 2-line, 5x8 font
+	lcd_cmd5(0b00001000); //display off
 
 	lcd_clear();
 
 	lcd_cmd(0b00000110); //entry mode set
-	lcd_cmd(0b00001100 | CURSOR_OFF | BLINK_OFF); //display on
+	lcd_cmd(0b00001100 | CURSOR_OFF | BLINK_OFF);
 
 	lcd_custom(custchar);
 
@@ -193,10 +191,10 @@ void lcd_init(void)  //init display
 //-----------------------------------------------------------------------------
 void lcd_bus(uint8_t data)  //write four bit
 	{
-	(data & 0b0001) ? D4_SET : D4_CLR;
-	(data & 0b0010) ? D5_SET : D5_CLR;
-	(data & 0b0100) ? D6_SET : D6_CLR;
-	(data & 0b1000) ? D7_SET : D7_CLR;
+	(data & 0b00000001) ? D4_SET : D4_CLR;
+	(data & 0b00000010) ? D5_SET : D5_CLR;
+	(data & 0b00000100) ? D6_SET : D6_CLR;
+	(data & 0b00001000) ? D7_SET : D7_CLR;
 
 	EN_SET;
 	_delay_us(100);
@@ -214,14 +212,6 @@ void lcd_wrt(uint8_t data)  //write data
 
 
 //-----------------------------------------------------------------------------
-void lcd_cmd(uint8_t data)  //write a command
-	{
-	RS_CLR;
-	lcd_wrt(data);
-	}
-
-
-//-----------------------------------------------------------------------------
 void lcd_dat(uint8_t data)  //write data to the display RAM
 	{
 	RS_SET;
@@ -230,10 +220,25 @@ void lcd_dat(uint8_t data)  //write data to the display RAM
 
 
 //-----------------------------------------------------------------------------
+void lcd_cmd(uint8_t data)  //write a command
+	{
+	RS_CLR;
+	lcd_wrt(data);
+	}
+
+
+//-----------------------------------------------------------------------------
+void lcd_cmd5(uint8_t data)  //wait 5 ms after write
+	{
+	lcd_cmd(data);
+	_delay_ms(5);
+	}
+
+
+//-----------------------------------------------------------------------------
 void lcd_clear(void)  //clear the screen
 	{
-	lcd_cmd(DISPLAY_CLR);
-	_delay_ms(5);
+	lcd_cmd5(DISPLAY_CLR);
 	}
 
 
@@ -270,6 +275,20 @@ inline void lcd_right(void)  //shift right
 inline void lcd_left(void)  //shift left
 	{
 	lcd_cmd(SCR_LEFT);
+	}
+
+
+//-----------------------------------------------------------------------------
+inline void lcd_cursor_on(void)  //cursor on, blink on
+	{
+	lcd_cmd(0b00001100 | CURSOR_ON | BLINK_ON);
+	}
+
+
+//-----------------------------------------------------------------------------
+inline void lcd_cursor_off(void)  //cursor off, blink off
+	{
+	lcd_cmd(0b00001100 | CURSOR_OFF | BLINK_OFF);
 	}
 
 
